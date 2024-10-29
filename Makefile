@@ -18,7 +18,7 @@ test: all
 	@curl -X PUT -H "Content-Type: application/json" -d '{"key1": "value1", "key2": "value2"}' http://localhost:8080/test       > /dev/null 2>&1 
 	@echo '{"k1": "v1", "k2": "v2"}' | ab -c 10 -n 1000000 -t 10 -p /dev/stdin -T application/json "http://localhost:8080/test" > /dev/null 2>&1  &
 	@ab -c 10 -n 1000000 -t 10 "http://localhost:8080/test"                                                                     > /dev/null 2>&1 
-	@killall ws ab
+	@killall -q ws ab || true
 	@sleep 1
 	@echo ""
 	@echo testing thread-unsafe version
@@ -28,6 +28,6 @@ test: all
 	@curl -X PUT -H "Content-Type: application/json" -d '{"key1": "value1", "key2": "value2"}' http://localhost:8080/test       > /dev/null 2>&1 
 	@echo '{"k1": "v1", "k2": "v2"}' | ab -c 10 -n 1000000 -t 10 -p /dev/stdin -T application/json "http://localhost:8080/test" > /dev/null 2>&1  &
 	@ab -c 10 -n 1000000 -t 10 "http://localhost:8080/test"                                                                     > /dev/null 2>&1 
-	@killall ws ab
+	@killall -q ws ab || true
 	@echo ""
 
