@@ -10,7 +10,7 @@ Blog post introducing the feature: <https://go.dev/blog/race-detector>
 
 ## Description
 
-`ws.go` is a small web service exposing a key-value store with CRUD-semantics mapped to HTTP PUT/GET/POST/DELETE.
+`ws.go` is a small web service exposing a key-value store with CRUD-semantics mapped to HTTP POST/GET/PUT/DELETE.
 
 Data is stored in a `map[string]string` and a CLI-flag `-safety` determines whether or not to use thread synchronization.
 
