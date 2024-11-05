@@ -6,9 +6,9 @@ CRUD semantics:
 
 Function | HTTP Method |
 ---------|-------------|
-Create   | PUT         |
+Create   | POS         |
 Read     | GET         |
-Update   | POST        |
+Update   | PUT         |
 Delete   | DELETE      |
 
 */
@@ -26,12 +26,15 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 )
 
 var (
-	kv     = map[string]string{}
-	mutex  = sync.RWMutex{}
-	safety = false
+	kv      = map[string]string{}
+	mutex   = sync.RWMutex{}
+	safety  = false
+	ts_save = int64(0) // unix timestamp of last save
+	ts_chng = int64(0) // unix timestamp of last change
 )
 
 func asJson(w http.ResponseWriter, status int, msg string) {
@@ -51,6 +54,38 @@ func asJson(w http.ResponseWriter, status int, msg string) {
 	w.Write(jsonResp)
 }
 
+func saveToDisk() {
+	// Load file from disk or create it if necessary
+	f, err := os.OpenFile("data.json", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		panic(err)
+	}
+	encoder := json.NewEncoder(f)
+	err = encoder.Encode(kv)
+
+	f.Close()
+
+	fmt.Println("saved to disk")
+}
+
+func loadFromDisk() {
+	f, err := os.Open("data.json")
+	if err == nil {
+		encoder := json.NewDecoder(f)
+		err = encoder.Decode(&kv)
+		f.Close()
+	}
+}
+
+func saveIfNeeded() {
+	// save to disk if enough time has elapsed
+	const secs_between_saves = 30
+	if (ts_chng - ts_save) >= secs_between_saves {
+		saveToDisk()
+		ts_save = time.Now().Unix()
+	}
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
 	url := r.URL.Path[1:]
 
@@ -59,7 +94,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 
 	// CREATE
-	case "PUT":
+	case "POST":
 		if safety {
 			mutex.Lock()
 		}
@@ -74,8 +109,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 				reqBody := string(buf)
 				kv[url] = reqBody
 				asJson(w, http.StatusOK, reqBody)
+				ts_chng = time.Now().Unix()
 			}
 		}
+		saveIfNeeded()
 		if safety {
 			mutex.Unlock()
 		}
@@ -95,7 +132,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 	// UPDATE
-	case "POST":
+	case "PUT":
 		if safety {
 			mutex.Lock()
 		}
@@ -107,10 +144,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			}
 			reqBody := string(buf)
 			kv[url] = reqBody
+			ts_chng = time.Now().Unix()
 			asJson(w, http.StatusOK, reqBody)
 		} else {
 			asJson(w, http.StatusNotFound, "not found")
 		}
+		saveIfNeeded()
 		if safety {
 			mutex.Unlock()
 		}
@@ -122,10 +161,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		}
 		if val, ok := kv[url]; ok {
 			delete(kv, url)
+			ts_chng = time.Now().Unix()
 			asJson(w, http.StatusOK, val)
 		} else {
 			asJson(w, http.StatusNotFound, "not found")
 		}
+		saveIfNeeded()
 		if safety {
 			mutex.Unlock()
 		}
@@ -133,6 +174,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	default:
 		asJson(w, http.StatusBadRequest, "Only PUT, GET, DELETE and POST methods are supported.")
 	}
+
 }
 
 func newReuseAddrListener(network, address string) (net.Listener, error) {
@@ -181,6 +223,8 @@ func main() {
 	safetyp := flag.Bool("safety", false, "thread-safety enabled")
 	flag.Parse()
 	safety = *safetyp
+
+	loadFromDisk()
 
 	// Create an HTTP server
 	server := &http.Server{
